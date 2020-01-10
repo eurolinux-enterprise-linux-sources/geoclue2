@@ -7,12 +7,6 @@
 # separated by a ';'.
 whitelist=@demo_agent@gnome-shell
 
-# Network NMEA source configuration options
-[network-nmea]
-
-# Fetch location from NMEA sources on local network?
-enable=true
-
 # WiFi source configuration options
 [wifi]
 
@@ -42,18 +36,6 @@ submission-nick=geoclue
 
 # Application configuration options
 #
-# NOTE: Having an entry here for an application with allowed=true means that
-#       geoclue will not ask agent to authorize the application. This is to
-#       ensure that system components and applications with built-in
-#       authorization mechanism (e.g web browsers) do not have to be bound to
-#       agents.
-#
-#       If your application is denied access to location information and your
-#       operating system doesn't provide any mechanism to change that, it is
-#       likely a bug in your operation system (or geoclue). The solution is to
-#       report the issue with all details, rather than adding your application
-#       to this list.
-#
 # Format:
 #
 # # Desktop ID of application without .desktop part
@@ -70,16 +52,6 @@ submission-nick=geoclue
 # users=
 
 [gnome-datetime-panel]
-allowed=true
-system=true
-users=
-
-[gnome-color-panel]
-allowed=true
-system=true
-users=
-
-[org.gnome.Shell]
 allowed=true
 system=true
 users=

@@ -47,7 +47,6 @@ struct _GClueModemManagerPrivate {
         MMModem *modem;
         MMModemLocation *modem_location;
         MMLocation3gpp *location_3gpp;
-        MMLocationGpsNmea *location_nmea;
 
         GCancellable *cancellable;
 
@@ -320,27 +319,11 @@ on_get_cdma_ready (GObject      *source_object,
                        mm_location_cdma_bs_get_longitude (location_cdma));
 }
 
-static gboolean
-is_location_gga_same (GClueModemManager *manager,
-                       const char       *new_gga)
-{
-        GClueModemManagerPrivate *priv = manager->priv;
-        const char *gga;
-
-        if (priv->location_nmea == NULL)
-                return FALSE;
-
-        gga = mm_location_gps_nmea_get_trace (priv->location_nmea, "$GPGGA");
-        return (g_strcmp0 (gga, new_gga) == 0);
-}
-
 static void
 on_get_gps_nmea_ready (GObject      *source_object,
                        GAsyncResult *res,
                        gpointer      user_data)
 {
-        GClueModemManager *manager = GCLUE_MODEM_MANAGER (user_data);
-        GClueModemManagerPrivate *priv = manager->priv;
         MMModemLocation *modem_location = MM_MODEM_LOCATION (source_object);
         MMLocationGpsNmea *location_nmea;
         const char *gga;
@@ -364,18 +347,13 @@ on_get_gps_nmea_ready (GObject      *source_object,
         gga = mm_location_gps_nmea_get_trace (location_nmea, "$GPGGA");
         if (gga == NULL) {
                 g_debug ("No GGA trace");
-                return;
+                goto out;
         }
-
-        if (is_location_gga_same (manager, gga)) {
-                g_debug ("New GGA trace is same as last one: %s", gga);
-                return;
-        }
-        g_clear_object (&priv->location_nmea);
-        priv->location_nmea = location_nmea;
 
         g_debug ("New GPGGA trace: %s", gga);
-        g_signal_emit (manager, signals[FIX_GPS], 0, gga);
+        g_signal_emit (GCLUE_MODEM_MANAGER (user_data), signals[FIX_GPS], 0, gga);
+out:
+        g_object_unref (location_nmea);
 }
 
 static void
@@ -432,6 +410,38 @@ out:
 }
 
 static void
+on_modem_enabled (GObject      *modem_object,
+                  GAsyncResult *res,
+                  gpointer      user_data)
+{
+        GTask *task = G_TASK (user_data);
+        GClueModemManagerPrivate *priv;
+        MMModemLocationSource caps;
+        GError *error = NULL;
+
+        if (!mm_modem_enable_finish (MM_MODEM (modem_object), res, &error)) {
+                if (error->code == MM_CORE_ERROR_IN_PROGRESS)
+                        /* Seems a previous async call hasn't returned yet. */
+                        g_task_return_boolean (task, TRUE);
+                else
+                        g_task_return_error (task, error);
+                g_object_unref (task);
+
+                return;
+        }
+        priv = GCLUE_MODEM_MANAGER (g_task_get_source_object (task))->priv;
+        g_debug ("manager '%s' enabled.", mm_object_get_path (priv->mm_object));
+
+        caps = mm_modem_location_get_enabled (priv->modem_location) | priv->caps;
+        mm_modem_location_setup (priv->modem_location,
+                                 caps,
+                                 TRUE,
+                                 g_task_get_cancellable (task),
+                                 on_modem_location_setup,
+                                 task);
+}
+
+static void
 enable_caps (GClueModemManager    *manager,
              MMModemLocationSource caps,
              GCancellable         *cancellable,
@@ -444,15 +454,10 @@ enable_caps (GClueModemManager    *manager,
         priv->caps |= caps;
         task = g_task_new (manager, cancellable, callback, user_data);
 
-        priv = GCLUE_MODEM_MANAGER (g_task_get_source_object (task))->priv;
-
-        caps = mm_modem_location_get_enabled (priv->modem_location) | priv->caps;
-        mm_modem_location_setup (priv->modem_location,
-                                 caps,
-                                 TRUE,
-                                 g_task_get_cancellable (task),
-                                 on_modem_location_setup,
-                                 task);
+        mm_modem_enable (priv->modem,
+                         cancellable,
+                         on_modem_enabled,
+                         task);
 }
 
 static gboolean
@@ -506,89 +511,16 @@ modem_has_caps (GClueModemManager    *manager,
 static void
 on_mm_object_added (GDBusObjectManager *object_manager,
                     GDBusObject        *object,
-                    gpointer            user_data);
-
-static void
-on_mm_modem_state_notify (GObject    *gobject,
-                          GParamSpec *pspec,
-                          gpointer    user_data)
-{
-        MMModem *mm_modem = MM_MODEM (gobject);
-        GClueModemManager *manager = GCLUE_MODEM_MANAGER (user_data);
-        GClueModemManagerPrivate *priv = manager->priv;
-        GDBusObjectManager *obj_manager = G_DBUS_OBJECT_MANAGER (priv->manager);
-        const char *path = mm_modem_get_path (mm_modem);
-        GDBusObject *object;
-
-        if (priv->mm_object != NULL) {
-                // In the meantime another modem with location caps was found.
-                g_signal_handlers_disconnect_by_func (mm_modem,
-                                                      on_mm_modem_state_notify,
-                                                      user_data);
-                g_object_unref (gobject);
-
-                return;
-        }
-
-        if (mm_modem_get_state (mm_modem) < MM_MODEM_STATE_ENABLED)
-                return;
-
-        g_debug ("Modem '%s' now enabled", path);
-
-        g_signal_handlers_disconnect_by_func (mm_modem,
-                                              on_mm_modem_state_notify,
-                                              user_data);
-
-        object = g_dbus_object_manager_get_object (obj_manager, path);
-        on_mm_object_added (obj_manager, object, user_data);
-        g_object_unref (mm_modem);
-}
-
-static void
-on_gps_refresh_rate_set (GObject      *source_object,
-                         GAsyncResult *res,
-                         gpointer      user_data)
-{
-        gboolean ret;
-        GError *error = NULL;
-
-        ret = mm_modem_location_set_gps_refresh_rate_finish
-                (MM_MODEM_LOCATION (source_object), res, &error);
-        if (!ret) {
-                g_warning ("Failed to set GPS refresh rate: %s",
-                           error->message);
-                g_error_free (error);
-        }
-}
-
-static void
-on_mm_object_added (GDBusObjectManager *object_manager,
-                    GDBusObject        *object,
                     gpointer            user_data)
 {
         MMObject *mm_object = MM_OBJECT (object);
         GClueModemManager *manager = GCLUE_MODEM_MANAGER (user_data);
-        MMModem *mm_modem;
         MMModemLocation *modem_location;
 
         if (manager->priv->mm_object != NULL)
                 return;
 
         g_debug ("New modem '%s'", mm_object_get_path (mm_object));
-        mm_modem = mm_object_get_modem (mm_object);
-        if (mm_modem_get_state (mm_modem) < MM_MODEM_STATE_ENABLED) {
-                g_debug ("Modem '%s' not enabled",
-                         mm_object_get_path (mm_object));
-
-                g_signal_connect_object (mm_modem,
-                                         "notify::state",
-                                         G_CALLBACK (on_mm_modem_state_notify),
-                                         manager,
-                                         0);
-
-                return;
-        }
-
         modem_location = mm_object_peek_modem_location (mm_object);
         if (modem_location == NULL)
                 return;
@@ -597,14 +529,8 @@ on_mm_object_added (GDBusObjectManager *object_manager,
                  mm_object_get_path (mm_object));
 
         manager->priv->mm_object = g_object_ref (mm_object);
-        manager->priv->modem = mm_modem;
+        manager->priv->modem = mm_object_get_modem (mm_object);
         manager->priv->modem_location = mm_object_get_modem_location (mm_object);
-
-        mm_modem_location_set_gps_refresh_rate (manager->priv->modem_location,
-                                                0,
-                                                manager->priv->cancellable,
-                                                on_gps_refresh_rate_set,
-                                                user_data);
 
         g_signal_connect (G_OBJECT (manager->priv->modem_location),
                           "notify::location",
@@ -918,15 +844,11 @@ gclue_modem_manager_disable_gps (GClueModem   *modem,
                                  GCancellable *cancellable,
                                  GError      **error)
 {
-        GClueModemManager *manager;
-
         g_return_val_if_fail (GCLUE_IS_MODEM_MANAGER (modem), FALSE);
         g_return_val_if_fail (gclue_modem_manager_get_is_gps_available (modem), FALSE);
-        manager = GCLUE_MODEM_MANAGER (modem);
 
-        g_clear_object (&manager->priv->location_nmea);
         g_debug ("Clearing GPS NMEA caps from modem");
-        return clear_caps (manager,
+        return clear_caps (GCLUE_MODEM_MANAGER (modem),
                            MM_MODEM_LOCATION_SOURCE_GPS_NMEA,
                            cancellable,
                            error);

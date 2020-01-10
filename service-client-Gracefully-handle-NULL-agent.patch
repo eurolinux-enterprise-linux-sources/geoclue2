@@ -1,0 +1,62 @@
+From 07a4f0c0c2e252f8975039a4320d69d04200ac31 Mon Sep 17 00:00:00 2001
+From: "Zeeshan Ali (Khattak)" <zeeshanak@gnome.org>
+Date: Thu, 6 Nov 2014 18:32:28 +0000
+Subject: [PATCH 1/7] service-client: Gracefully handle NULL agent
+
+Don't connect to signals on agent if its NULL. Agent is currently
+entirely optional.
+---
+ src/gclue-service-client.c | 23 +++++++++++++++--------
+ 1 file changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/src/gclue-service-client.c b/src/gclue-service-client.c
+index c27faac..0ff3e85 100644
+--- a/src/gclue-service-client.c
++++ b/src/gclue-service-client.c
+@@ -385,7 +385,11 @@ gclue_service_client_handle_start (GClueClient           *client,
+                 return TRUE;
+         }
+ 
+-        max_accuracy = gclue_agent_get_max_accuracy_level (priv->agent_proxy);
++        if (priv->agent_proxy != NULL)
++                max_accuracy = gclue_agent_get_max_accuracy_level (priv->agent_proxy);
++        else
++                max_accuracy = GCLUE_ACCURACY_LEVEL_EXACT;
++
+         if (max_accuracy == 0) {
+                 g_dbus_method_invocation_return_error (invocation,
+                                                        G_DBUS_ERROR,
+@@ -429,9 +433,11 @@ gclue_service_client_finalize (GObject *object)
+ 
+         g_clear_pointer (&priv->path, g_free);
+         g_clear_object (&priv->connection);
+-        g_signal_handlers_disconnect_by_func (priv->agent_proxy,
+-                                              G_CALLBACK (on_agent_props_changed),
+-                                              object);
++        if (priv->agent_proxy != NULL)
++                g_signal_handlers_disconnect_by_func
++                                (priv->agent_proxy,
++                                 G_CALLBACK (on_agent_props_changed),
++                                 object);
+         g_clear_object (&priv->agent_proxy);
+         g_clear_object (&priv->locator);
+         g_clear_object (&priv->location);
+@@ -495,10 +501,11 @@ gclue_service_client_set_property (GObject      *object,
+ 
+         case PROP_AGENT_PROXY:
+                 client->priv->agent_proxy = g_value_dup_object (value);
+-                g_signal_connect (client->priv->agent_proxy,
+-                                  "g-properties-changed",
+-                                  G_CALLBACK (on_agent_props_changed),
+-                                  object);
++                if (client->priv->agent_proxy != NULL)
++                        g_signal_connect (client->priv->agent_proxy,
++                                          "g-properties-changed",
++                                          G_CALLBACK (on_agent_props_changed),
++                                          object);
+                 break;
+ 
+         default:
+-- 
+2.1.0
+

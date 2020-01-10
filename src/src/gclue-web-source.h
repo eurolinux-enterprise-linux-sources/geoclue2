@@ -65,9 +65,9 @@ struct _GClueWebSourceClass {
         SoupMessage *     (*create_query)        (GClueWebSource *source,
                                                   GError        **error);
         SoupMessage *     (*create_submit_query) (GClueWebSource  *source,
-                                                  GClueLocation   *location,
+                                                  GeocodeLocation *location,
                                                   GError         **error);
-        GClueLocation * (*parse_response)        (GClueWebSource *source,
+        GeocodeLocation * (*parse_response)      (GClueWebSource *source,
                                                   const char     *response,
                                                   GError        **error);
         GClueAccuracyLevel (*get_available_accuracy_level)

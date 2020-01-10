@@ -29,7 +29,7 @@ gclue_service_location_initable_iface_init (GInitableIface *iface);
 
 G_DEFINE_TYPE_WITH_CODE (GClueServiceLocation,
                          gclue_service_location,
-                         GCLUE_DBUS_TYPE_LOCATION_SKELETON,
+                         GCLUE_TYPE_LOCATION_SKELETON,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                 gclue_service_location_initable_iface_init));
 
@@ -72,6 +72,7 @@ gclue_service_location_get_property (GObject    *object,
                                      GParamSpec *pspec)
 {
         GClueServiceLocation *self = GCLUE_SERVICE_LOCATION (object);
+        GClueLocation *location = GCLUE_LOCATION (object);
 
         switch (prop_id) {
         case PROP_CLIENT_INFO:
@@ -88,25 +89,17 @@ gclue_service_location_get_property (GObject    *object,
 
         case PROP_LOCATION:
         {
-                GClueDBusLocation *location;
-                GClueLocation *loc;
-                GVariant *timestamp;
-                guint64 sec, usec;
+                GeocodeLocation *loc;
+                gdouble altitude;
 
-                location = GCLUE_DBUS_LOCATION (object);
-
-                timestamp = gclue_dbus_location_get_timestamp (location);
-                g_variant_get (timestamp, "(tt)", &sec, &usec);
-
-                loc = gclue_location_new_full
-                        (gclue_dbus_location_get_latitude (location),
-                         gclue_dbus_location_get_longitude (location),
-                         gclue_dbus_location_get_accuracy (location),
-                         gclue_dbus_location_get_speed (location),
-                         gclue_dbus_location_get_heading (location),
-                         gclue_dbus_location_get_altitude (location),
-                         sec,
-                         gclue_dbus_location_get_description (location));
+                loc = geocode_location_new_with_description
+                        (gclue_location_get_latitude (location),
+                         gclue_location_get_longitude (location),
+                         gclue_location_get_accuracy (location),
+                         gclue_location_get_description (location));
+                altitude = gclue_location_get_altitude (location);
+                if (altitude != GEOCODE_LOCATION_ALTITUDE_UNKNOWN)
+                        g_object_set (loc, "altitude", altitude, NULL);
 
                 g_value_take_object (value, loc);
                 break;
@@ -124,6 +117,7 @@ gclue_service_location_set_property (GObject      *object,
                                      GParamSpec   *pspec)
 {
         GClueServiceLocation *self = GCLUE_SERVICE_LOCATION (object);
+        GClueLocation *location = GCLUE_LOCATION (object);
 
         switch (prop_id) {
         case PROP_CLIENT_INFO:
@@ -140,36 +134,21 @@ gclue_service_location_set_property (GObject      *object,
 
         case PROP_LOCATION:
         {
-                GClueDBusLocation *location;
-                GClueLocation *loc;
+                GeocodeLocation *loc;
                 gdouble altitude;
-                GeocodeLocation *g_loc;
-                GVariant *timestamp;
 
-                location = GCLUE_DBUS_LOCATION (object);
                 loc = g_value_get_object (value);
-                g_loc = GEOCODE_LOCATION (loc);
-                gclue_dbus_location_set_latitude
-                        (location, geocode_location_get_latitude (g_loc));
-                gclue_dbus_location_set_longitude
-                        (location, geocode_location_get_longitude (g_loc));
-                gclue_dbus_location_set_accuracy
-                        (location, geocode_location_get_accuracy (g_loc));
-                gclue_dbus_location_set_description
-                        (location, geocode_location_get_description (g_loc));
-                gclue_dbus_location_set_speed
-                        (location, gclue_location_get_speed (loc));
-                gclue_dbus_location_set_heading
-                        (location, gclue_location_get_heading (loc));
-                timestamp = g_variant_new
-                        ("(tt)",
-                         (guint64) geocode_location_get_timestamp (g_loc),
-                         (guint64) 0);
-                gclue_dbus_location_set_timestamp
-                        (location, timestamp);
-                altitude = geocode_location_get_altitude (g_loc);
+                gclue_location_set_latitude
+                        (location, geocode_location_get_latitude (loc));
+                gclue_location_set_longitude
+                        (location, geocode_location_get_longitude (loc));
+                gclue_location_set_accuracy
+                        (location, geocode_location_get_accuracy (loc));
+                gclue_location_set_description
+                        (location, geocode_location_get_description (loc));
+                altitude = geocode_location_get_altitude (loc);
                 if (altitude != GEOCODE_LOCATION_ALTITUDE_UNKNOWN)
-                        gclue_dbus_location_set_altitude (location, altitude);
+                        gclue_location_set_altitude (location, altitude);
                 break;
         }
 
@@ -193,10 +172,10 @@ gclue_service_location_handle_method_call (GDBusConnection       *connection,
         GDBusInterfaceVTable *skeleton_vtable;
 
         if (!gclue_client_info_check_bus_name (priv->client_info, sender)) {
-                g_dbus_method_invocation_return_error_literal (invocation,
-                                                               G_DBUS_ERROR,
-                                                               G_DBUS_ERROR_ACCESS_DENIED,
-                                                               "Access denied");
+                g_dbus_method_invocation_return_error (invocation,
+                                                       G_DBUS_ERROR,
+                                                       G_DBUS_ERROR_ACCESS_DENIED,
+                                                       "Access denied");
                 return;
         }
 
@@ -341,7 +320,7 @@ gclue_service_location_class_init (GClueServiceLocationClass *klass)
         gParamSpecs[PROP_LOCATION] = g_param_spec_object ("location",
                                                           "Location",
                                                           "Location",
-                                                          GCLUE_TYPE_LOCATION,
+                                                          GEOCODE_TYPE_LOCATION,
                                                           G_PARAM_READWRITE);
         g_object_class_install_property (object_class,
                                          PROP_LOCATION,
@@ -354,8 +333,8 @@ gclue_service_location_init (GClueServiceLocation *location)
         location->priv = G_TYPE_INSTANCE_GET_PRIVATE (location,
                                                       GCLUE_TYPE_SERVICE_LOCATION,
                                                       GClueServiceLocationPrivate);
-        gclue_dbus_location_set_altitude (GCLUE_DBUS_LOCATION (location),
-                                          GEOCODE_LOCATION_ALTITUDE_UNKNOWN);
+        gclue_location_set_altitude (GCLUE_LOCATION (location),
+                                     GEOCODE_LOCATION_ALTITUDE_UNKNOWN);
 }
 
 static gboolean
@@ -380,7 +359,7 @@ GClueServiceLocation *
 gclue_service_location_new (GClueClientInfo *info,
                             const char      *path,
                             GDBusConnection *connection,
-                            GClueLocation   *location,
+                            GeocodeLocation *location,
                             GError         **error)
 {
         return g_initable_new (GCLUE_TYPE_SERVICE_LOCATION,

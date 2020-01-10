@@ -1,19 +1,7 @@
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 NULL =
 
-if BUILD_LIBGEOCLUE
-LIBGEOCLUE_DIR = libgeoclue
-else
-LIBGEOCLUE_DIR =
-endif
-
-if BUILD_BACKEND
-BACKEND_DIR = src
-else
-BACKEND_DIR =
-endif
-
-SUBDIRS = build-aux public-api $(BACKEND_DIR) data $(LIBGEOCLUE_DIR) demo po docs
+SUBDIRS = build-aux src data demo po docs
 
 INTLTOOL_FILES =				\
 	intltool-extract.in			\

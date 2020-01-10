@@ -24,9 +24,9 @@
 #define GCLUE_SERVICE_LOCATION_H
 
 #include <glib-object.h>
-#include "gclue-location.h"
+#include "geocode-glib/geocode-location.h"
 #include "gclue-client-info.h"
-#include "gclue-location-interface.h"
+#include "geoclue-interface.h"
 
 G_BEGIN_DECLS
 
@@ -44,7 +44,7 @@ typedef struct _GClueServiceLocationPrivate GClueServiceLocationPrivate;
 
 struct _GClueServiceLocation
 {
-        GClueDBusLocationSkeleton parent;
+        GClueLocationSkeleton parent;
 
         /*< private >*/
         GClueServiceLocationPrivate *priv;
@@ -52,7 +52,7 @@ struct _GClueServiceLocation
 
 struct _GClueServiceLocationClass
 {
-        GClueDBusLocationSkeletonClass parent_class;
+        GClueLocationSkeletonClass parent_class;
 };
 
 GType gclue_service_location_get_type (void) G_GNUC_CONST;
@@ -60,7 +60,7 @@ GType gclue_service_location_get_type (void) G_GNUC_CONST;
 GClueServiceLocation * gclue_service_location_new      (GClueClientInfo      *info,
                                                         const char           *path,
                                                         GDBusConnection      *connection,
-                                                        GClueLocation        *location,
+                                                        GeocodeLocation      *location,
                                                         GError              **error);
 const char *           gclue_service_location_get_path (GClueServiceLocation *location);
 

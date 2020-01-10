@@ -1,0 +1,48 @@
+From fea6f1844d2c8dc13f94da5af1aea10430ad8ede Mon Sep 17 00:00:00 2001
+From: Fabrice Bellet <fabrice@bellet.info>
+Date: Wed, 25 Mar 2015 14:52:30 +0100
+Subject: [PATCH 3/7] modem-gps: Fix GPS coordinates parsing
+
+Latitude and longitude don't have the same number of digits
+on the left side of the decimal point in the GGA NMEA sentence.
+
+https://bugs.freedesktop.org/show_bug.cgi?id=89715
+---
+ src/gclue-modem-gps.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/gclue-modem-gps.c b/src/gclue-modem-gps.c
+index 7f1338f..5295fe3 100644
+--- a/src/gclue-modem-gps.c
++++ b/src/gclue-modem-gps.c
+@@ -215,6 +215,8 @@ parse_coordinate_string (const char *coordinate,
+ {
+         gdouble minutes, degrees, out;
+         gchar *degrees_str;
++        gchar *dot_str;
++        gint dot_offset;
+ 
+         if (coordinate[0] == '\0' ||
+             direction[0] == '\0' ||
+@@ -230,11 +232,16 @@ parse_coordinate_string (const char *coordinate,
+                 return INVALID_COORDINATE;
+         }
+ 
+-        degrees_str = g_strndup (coordinate, 2);
++        dot_str = g_strstr_len (coordinate, 6, ".");
++        if (dot_str == NULL)
++                return INVALID_COORDINATE;
++        dot_offset = dot_str - coordinate;
++
++        degrees_str = g_strndup (coordinate, dot_offset - 2);
+         degrees = g_ascii_strtod (degrees_str, NULL);
+         g_free (degrees_str);
+ 
+-        minutes = g_ascii_strtod (coordinate + 2, NULL);
++        minutes = g_ascii_strtod (coordinate + dot_offset - 2, NULL);
+ 
+         /* Include the minutes as part of the degrees */
+         out = degrees + (minutes / 60.0);
+-- 
+2.1.0
+

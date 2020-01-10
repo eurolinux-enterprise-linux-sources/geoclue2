@@ -56,7 +56,6 @@ struct _GClueConfigPrivate
 
         char *wifi_url;
         gboolean wifi_submit;
-        gboolean enable_nmea_source;
         char *wifi_submit_url;
         char *wifi_submit_nick;
 
@@ -112,7 +111,7 @@ load_agent_config (GClueConfig *config)
 static void
 load_app_configs (GClueConfig *config)
 {
-        const char *known_groups[] = { "agent", "wifi", "network-nmea", NULL };
+        const char *known_groups[] = { "agent", "wifi", NULL };
         GClueConfigPrivate *priv = config->priv;
         gsize num_groups = 0, i;
         char **groups;
@@ -233,26 +232,6 @@ load_wifi_config (GClueConfig *config)
 }
 
 static void
-load_network_nmea_config (GClueConfig *config)
-{
-        GClueConfigPrivate *priv = config->priv;
-        GError *error = NULL;
-
-        priv->enable_nmea_source = g_key_file_get_boolean (priv->key_file,
-                                                           "network-nmea",
-                                                           "enable",
-                                                           &error);
-        if (error != NULL) {
-                g_debug ("Failed to get config network-nmea/enable:"
-                         " %s",
-                         error->message);
-                g_error_free (error);
-
-                return;
-        }
-}
-
-static void
 gclue_config_init (GClueConfig *config)
 {
         GError *error = NULL;
@@ -277,7 +256,6 @@ gclue_config_init (GClueConfig *config)
         load_agent_config (config);
         load_app_configs (config);
         load_wifi_config (config);
-        load_network_nmea_config (config);
 }
 
 GClueConfig *
@@ -317,7 +295,7 @@ gclue_config_get_app_perm (GClueConfig     *config,
         gsize i;
         guint64 uid;
 
-        g_return_val_if_fail (desktop_id != NULL, GCLUE_APP_PERM_DISALLOWED);
+        g_return_val_if_fail (desktop_id != NULL, FALSE);
 
         for (node = priv->app_configs; node != NULL; node = node->next) {
                 if (strcmp (((AppConfig *) node->data)->id, desktop_id) == 0) {
@@ -403,12 +381,6 @@ gboolean
 gclue_config_get_wifi_submit_data (GClueConfig *config)
 {
         return config->priv->wifi_submit;
-}
-
-gboolean
-gclue_config_get_enable_nmea_source (GClueConfig *config)
-{
-        return config->priv->enable_nmea_source;
 }
 
 void

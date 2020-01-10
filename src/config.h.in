@@ -1,13 +1,7 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
-/* Build backend? */
-#undef BUILD_BACKEND
-
 /* Build demo agent? */
 #undef BUILD_DEMO_AGENT
-
-/* Build convenience library? */
-#undef BUILD_LIBGEOCLUE
 
 /* Build 3G source? */
 #undef GCLUE_USE_3G_SOURCE
@@ -17,9 +11,6 @@
 
 /* Build modem GPS source? */
 #undef GCLUE_USE_MODEM_GPS_SOURCE
-
-/* Build network NMEA source? */
-#undef GCLUE_USE_NMEA_SOURCE
 
 /* The name of the gettext domain */
 #undef GETTEXT_PACKAGE
@@ -57,7 +48,8 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
-/* Define to the sub-directory where libtool stores uninstalled libraries. */
+/* Define to the sub-directory in which libtool stores uninstalled libraries.
+   */
 #undef LT_OBJDIR
 
 /* Name of package */
