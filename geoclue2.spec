@@ -1,6 +1,6 @@
 Name:           geoclue2
 Version:        2.1.10
-Release:        5%{?dist}
+Release:        2%{?dist}
 Summary:        Geolocation service
 
 License:        GPLv2+
@@ -112,15 +112,6 @@ exit 0
 
 
 %changelog
-* Wed Apr 27 2016 Zeeshan Ali <zeenix@redhat.com> 2.1.10-5
-- Don't obsolete geoclue1 (rhbz#1285479).
-
-* Wed Jul 15 2015 Zeeshan Ali <zeenix@redhat.com> 2.1.10-4
-- Obsolete all of geoclue1 packages (rhbz#1221940).
-
-* Tue Jul 14 2015 Zeeshan Ali <zeenix@redhat.com> 2.1.10-3
-- Obsolete geoclue1 (rhbz#1221940).
-
 * Fri Apr 17 2015 Zeeshan Ali <zeenix@redhat.com> 2.1.10-2
 - Backport fixes from 2.2.0.
 
