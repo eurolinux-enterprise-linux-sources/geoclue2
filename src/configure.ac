@@ -1,7 +1,7 @@
 AC_PREREQ([2.63])
 
 AC_INIT([geoclue],
-        [2.1.10],
+        [2.4.5],
         [http://bugs.freedesktop.org/enter_bug.cgi?product=GeoClue],
         [geoclue],
         [http://www.freedesktop.org/wiki/Software/GeoClue])
@@ -39,8 +39,9 @@ AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE,"$GETTEXT_PACKAGE",[The name of the gettext d
 
 GLIB_MIN_VERSION=2.34.0
 JSON_GLIB_MIN_VERSION=0.14
-GEOIP_MIN_VERSION=1.5.1
 LIBMM_GLIB_MIN_VERSION=1.0
+LIBSOUP_MIN_VERSION=2.42
+AVAHI_MIN_VERSION=0.6.10
 
 AC_CHECK_LIB([m],[sin])
 
@@ -54,55 +55,111 @@ PKG_CHECK_MODULES(GEOCLUE, [
   gio-2.0 >= $GLIB_MIN_VERSION
   gio-unix-2.0 >= $GLIB_MIN_VERSION
   json-glib-1.0 >= $JSON_GLIB_MIN_VERSION
-  libsoup-2.4
+  libsoup-2.4 >= $LIBSOUP_MIN_VERSION
 ])
+
+# GObject-introspection support
+GOBJECT_INTROSPECTION_CHECK([0.9.6])
+build_introspection=no
+
+# libgeoclue
+AC_ARG_ENABLE(libgeoclue,
+              AS_HELP_STRING([--disable-libgeoclue], [Disable convenience library]),
+              [build_libgeoclue=$enableval], [build_libgeoclue=yes])
+if test "x$build_libgeoclue" = "xyes"; then
+  PKG_CHECK_MODULES(LIBGEOCLUE, [
+    glib-2.0 >= $GLIB_MIN_VERSION
+    gio-2.0 >= $GLIB_MIN_VERSION
+    gio-unix-2.0 >= $GLIB_MIN_VERSION
+  ])
+  if test "x$found_introspection" == "xyes"; then
+     build_introspection=yes
+  fi
+  build_libgeoclue=yes
+
+  AC_DEFINE([BUILD_LIBGEOCLUE], [1], [Build convenience library?])
+else
+  AC_DEFINE([BUILD_LIBGEOCLUE], [0], [Build convenience library?])
+fi
+AM_CONDITIONAL([BUILD_LIBGEOCLUE], [test "x$build_libgeoclue" = "xyes"])
 
 # 3G source
 AC_ARG_ENABLE(3g-source,
               AS_HELP_STRING([--disable-3g-source], [Disable 3G backend (requires ModemManager)]),
               [build_3g_source=$enableval], [build_3g_source=yes])
-if test "$build_3g_source" = "yes"; then
+if test "x$build_3g_source" = "xyes"; then
   build_modem_source=yes
   AC_DEFINE([GCLUE_USE_3G_SOURCE], [1], [Build 3G source?])
 else
   AC_DEFINE([GCLUE_USE_3G_SOURCE], [0], [Build 3G source?])
 fi
-AM_CONDITIONAL([BUILD_3G_SOURCE], [test "$build_3g_source" = "yes"])
+AM_CONDITIONAL([BUILD_3G_SOURCE], [test "x$build_3g_source" = "xyes"])
 
 # CDMA source
 AC_ARG_ENABLE(cdma-source,
               AS_HELP_STRING([--disable-cdma-source], [Disable CDMA backend (requires ModemManager)]),
               [build_cdma_source=$enableval], [build_cdma_source=yes])
-if test "$build_cdma_source" = "yes"; then
+if test "x$build_cdma_source" = "xyes"; then
   build_modem_source=yes
   AC_DEFINE([GCLUE_USE_CDMA_SOURCE], [1], [Build CDMA source?])
 else
   AC_DEFINE([GCLUE_USE_CDMA_SOURCE], [0], [Build CDMA source?])
 fi
-AM_CONDITIONAL([BUILD_CDMA_SOURCE], [test "$build_cdma_source" = "yes"])
+AM_CONDITIONAL([BUILD_CDMA_SOURCE], [test "x$build_cdma_source" = "xyes"])
 
 # GPS source
 AC_ARG_ENABLE(modem-gps-source,
               AS_HELP_STRING([--disable-modem-gps-source], [Disable modem GPS backend (requires ModemManager)]),
               [build_modem_gps_source=$enableval], [build_modem_gps_source=yes])
-if test "$build_modem_gps_source" = "yes"; then
+if test "x$build_modem_gps_source" = "xyes"; then
   build_modem_source=yes
   AC_DEFINE([GCLUE_USE_MODEM_GPS_SOURCE], [1], [Build modem GPS source?])
 else
   AC_DEFINE([GCLUE_USE_MODEM_GPS_SOURCE], [0], [Build modem GPS source?])
 fi
-AM_CONDITIONAL([BUILD_MODEM_GPS_SOURCE], [test "$build_modem_gps_source" = "yes"])
+AM_CONDITIONAL([BUILD_MODEM_GPS_SOURCE], [test "x$build_modem_gps_source" = "xyes"])
 
 # Modem source is used in common by GPS, 3G and CDMA sources
-if test "$build_modem_source" = "yes"; then
+if test "x$build_modem_source" = "xyes"; then
   require_modemmanager=yes
 fi
-AM_CONDITIONAL([BUILD_MODEM_SOURCE], [test "$build_modem_source" = "yes"])
+AM_CONDITIONAL([BUILD_MODEM_SOURCE], [test "x$build_modem_source" = "xyes"])
 
-# Check for ModemManager if one of the sources requires it
-if test "$require_modemmanager" = "yes"; then
-  PKG_CHECK_MODULES(ModemManager, mm-glib >= $LIBMM_GLIB_MIN_VERSION)
+# Network NMEA Source
+AC_ARG_ENABLE(nmea-source,
+              AS_HELP_STRING([--disable-nmea-source],
+                             [Disable network NMEA source (requires avahi-client and avahi-glib)]),
+              [build_nmea_source=$enableval], [build_nmea_source=yes])
+
+if test "x$build_nmea_source" = "xyes"; then
+  AC_DEFINE([GCLUE_USE_NMEA_SOURCE], [1], [Build network NMEA source?])
+else
+  AC_DEFINE([GCLUE_USE_NMEA_SOURCE], [0], [Build network NMEA source?])
 fi
+AM_CONDITIONAL([BUILD_NMEA_SOURCE], [test "x$build_nmea_source" = "xyes"])
+
+# Backend build
+AC_ARG_ENABLE(backend,
+              AS_HELP_STRING([--disable-backend], [Disable backend]),
+              [build_backend=$enableval], [build_backend=yes])
+
+if test "x$build_backend" = "xyes"; then
+  # Check for ModemManager if one of the sources requires it
+  if test "x$require_modemmanager" = "xyes"; then
+    PKG_CHECK_MODULES(ModemManager, mm-glib >= $LIBMM_GLIB_MIN_VERSION)
+  fi
+
+  if test "x$build_nmea_source" = "xyes"; then
+      # Check for avahi-client and avahi-glib
+      PKG_CHECK_MODULES(NMEA_SOURCE, [
+                        avahi-client >= $AVAHI_MIN_VERSION
+                        avahi-glib >= $AVAHI_MIN_VERSION])
+  fi
+  AC_DEFINE([BUILD_BACKEND], [1], [Build backend?])
+else
+  AC_DEFINE([BUILD_BACKEND], [0], [Build backend?])
+fi
+AM_CONDITIONAL([BUILD_BACKEND], [test "x$build_backend" = "xyes"])
 
 # Demo agent
 AC_ARG_ENABLE(demo-agent,
@@ -153,13 +210,10 @@ if test x$cross_compiling != xyes; then
 else
 	AC_PATH_PROG([GDBUS_CODEGEN],[gdbus-codegen])
 fi
-AC_SUBST([GDBUS_CODEGEN])
 
-if test "x$GDBUS_CODEGEN" = "x"; then
-	ifelse([$2],,[AC_MSG_ERROR([gdbus-codegen not found.])],[$2])
-else
-	ifelse([$1],,[:],[$1])
-fi
+AS_IF([test "$GDBUS_CODEGEN" = ""],[
+	AC_MSG_ERROR([gdbus-codegen not found])
+])
 
 # systemd
 AC_ARG_WITH([systemdsystemunitdir],
@@ -184,13 +238,18 @@ AC_CONFIG_FILES([
   src/geoclue-$GEOCLUE_API_VERSION.pc:src/geoclue.pc.in
   src/agent/Makefile
   src/geocode-glib/Makefile
-  src/public-api/Makefile
+  public-api/Makefile
   po/Makefile.in
   data/org.freedesktop.GeoClue2.conf
+  data/org.freedesktop.GeoClue2.Agent.conf
   data/Makefile
+  libgeoclue/Makefile
+  libgeoclue/libgeoclue-$GEOCLUE_API_VERSION.pc:libgeoclue/libgeoclue.pc.in
   demo/Makefile
   docs/Makefile
+  docs/lib/Makefile
   docs/version.xml
+  docs/lib/version.xml
 ])
 
 AC_OUTPUT
@@ -205,7 +264,11 @@ AC_MSG_NOTICE([
         c compiler:               ${CC} ${CFLAGS}
         systemdsystemunitdir:     ${systemdsystemunitdir}
 
+        Backend:                  ${build_backend}
+        Convenience library:      ${build_libgeoclue}
+        Introspection:            ${build_introspection}
         3G source:                ${build_3g_source}
         CDMA source:              ${build_cdma_source}
         Modem GPS source:         ${build_modem_gps_source}
+        Network NMEA source:      ${build_nmea_source}
 ])

@@ -1,22 +1,15 @@
 Name:           geoclue2
-Version:        2.1.10
-Release:        2%{?dist}
+Version:        2.4.5
+Release:        1%{?dist}
 Summary:        Geolocation service
 
 License:        GPLv2+
 URL:            http://www.freedesktop.org/wiki/Software/GeoClue/
-Source0:        http://www.freedesktop.org/software/geoclue/releases/2.1/geoclue-%{version}.tar.xz
+Source0:        http://www.freedesktop.org/software/geoclue/releases/2.4/geoclue-%{version}.tar.xz
 
-# Fixes from 2.2.0
-Patch01: locator-Correct-source-accuracy-comparison.patch
-Patch02: service-client-Delay-unrefing-ServiceLocation.patch
-Patch03: modem-gps-Fix-GPS-coordinates-parsing.patch
-Patch04: service-client-Gracefully-handle-NULL-agent.patch
-Patch05: modem-manager-Don-t-enable-the-modem.patch
-Patch06: wifi-Remove-a-redundant-condition.patch
-Patch07: modem-manager-Wait-for-modem-to-be-enabled.patch
-
+BuildRequires:  avahi-glib-devel
 BuildRequires:  glib2-devel
+BuildRequires:  gobject-introspection-devel
 BuildRequires:  intltool
 BuildRequires:  itstool
 BuildRequires:  json-glib-devel
@@ -38,41 +31,51 @@ simple as possible, while the secondary goal is to ensure that no application
 can access location information without explicit permission from user.
 
 
+%package        libs
+Summary:        Geoclue client library
+License:        LGPLv2+
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+
+%description    libs
+The %{name}-libs package contains a convenience library to interact with
+Geoclue service.
+
+
 %package        devel
 Summary:        Development files for %{name}
 Requires:       %{name}%{?_isa} = %{version}-%{release}
+Requires:       %{name}-libs%{?_isa} = %{version}-%{release}
 
 %description    devel
 The %{name}-devel package contains files for developing applications that
 use %{name}.
 
 
+%package        demos
+Summary:        Demo applications for %{name}
+Requires:       %{name}%{?_isa} = %{version}-%{release}
+BuildRequires:  libnotify-devel
+
+%description    demos
+The %{name}-demos package contains demo applications that use %{name}.
+
+
 %prep
 %setup -q -n geoclue-%{version}
 
-%patch01 -p1 -b .locator-Correct-source-accuracy-comparison
-%patch02 -p1 -b .service-client-Delay-unrefing-ServiceLocation
-%patch03 -p1 -b .modem-gps-Fix-GPS-coordinates-parsing
-%patch04 -p1 -b .service-client-Gracefully-handle-NULL-agent
-%patch05 -p1 -b .modem-manager-Don-t-enable-the-modem
-%patch06 -p1 -b .wifi-Remove-a-redundant-condition
-%patch07 -p1 -b .modem-manager-Wait-for-modem-to-be-enabled
 
 %build
-%configure --with-dbus-service-user=geoclue
+%configure --with-dbus-service-user=geoclue --enable-demo-agent
 make %{?_smp_mflags} V=1
 
 
 %install
 %make_install
 
+find $RPM_BUILD_ROOT -name '*.la' -delete
+
 # Home directory for the 'geoclue' user
 mkdir -p $RPM_BUILD_ROOT/var/lib/geoclue
-
-# Remove demo files
-rm $RPM_BUILD_ROOT%{_datadir}/applications/geoclue-demo-agent.desktop
-rm $RPM_BUILD_ROOT%{_datadir}/applications/geoclue-where-am-i.desktop
-rm $RPM_BUILD_ROOT%{_libexecdir}/geoclue-2.0/demos/where-am-i
 
 
 %pre
@@ -95,9 +98,14 @@ exit 0
 %postun
 %systemd_postun_with_restart geoclue.service
 
+%post libs -p /sbin/ldconfig
+
+%postun libs -p /sbin/ldconfig
+
 
 %files
-%doc COPYING NEWS
+%license COPYING
+%doc NEWS
 %config %{_sysconfdir}/geoclue/
 %{_sysconfdir}/dbus-1/system.d/org.freedesktop.GeoClue2.conf
 %{_sysconfdir}/dbus-1/system.d/org.freedesktop.GeoClue2.Agent.conf
@@ -106,12 +114,41 @@ exit 0
 %{_unitdir}/geoclue.service
 %attr(755,geoclue,geoclue) %dir /var/lib/geoclue
 
+%files libs
+%license COPYING.LIB
+%{_libdir}/girepository-1.0/Geoclue-2.0.typelib
+%{_libdir}/libgeoclue-2.so.0*
+
 %files devel
 %{_datadir}/dbus-1/interfaces/org.freedesktop.GeoClue2*.xml
+%{_datadir}/gir-1.0/Geoclue-2.0.gir
+%{_includedir}/libgeoclue-2.0/
 %{_libdir}/pkgconfig/geoclue-2.0.pc
+%{_libdir}/pkgconfig/libgeoclue-2.0.pc
+%{_libdir}/libgeoclue-2.so
 
+%files demos
+%dir %{_libexecdir}/geoclue-2.0
+%dir %{_libexecdir}/geoclue-2.0/demos
+%{_libexecdir}/geoclue-2.0/demos/where-am-i
+%{_libexecdir}/geoclue-2.0/demos/agent
+%{_datadir}/applications/geoclue-demo-agent.desktop
+%{_datadir}/applications/geoclue-where-am-i.desktop
 
 %changelog
+* Fri Jan 27 2017 Kalev Lember <klember@redhat.com> - 2.4.5-1
+- Update to 2.4.5
+- Resolves: #1386867
+
+* Wed Apr 27 2016 Zeeshan Ali <zeenix@redhat.com> 2.1.10-5
+- Don't obsolete geoclue1 (rhbz#1285479).
+
+* Wed Jul 15 2015 Zeeshan Ali <zeenix@redhat.com> 2.1.10-4
+- Obsolete all of geoclue1 packages (rhbz#1221940).
+
+* Tue Jul 14 2015 Zeeshan Ali <zeenix@redhat.com> 2.1.10-3
+- Obsolete geoclue1 (rhbz#1221940).
+
 * Fri Apr 17 2015 Zeeshan Ali <zeenix@redhat.com> 2.1.10-2
 - Backport fixes from 2.2.0.
 

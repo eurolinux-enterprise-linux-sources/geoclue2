@@ -67,9 +67,9 @@ gclue_wifi_create_query (GClueWebSource *source,
                          GError        **error);
 static SoupMessage *
 gclue_wifi_create_submit_query (GClueWebSource  *source,
-                                GeocodeLocation *location,
+                                GClueLocation   *location,
                                 GError         **error);
-static GeocodeLocation *
+static GClueLocation *
 gclue_wifi_parse_response (GClueWebSource *source,
                            const char     *json,
                            GError        **error);
@@ -377,8 +377,7 @@ connect_bss_signals (GClueWifi *wifi)
         if (priv->bss_added_id != 0)
                 return;
         if (priv->interface == NULL) {
-                if (wifi->priv->accuracy_level == GCLUE_ACCURACY_LEVEL_CITY)
-                        gclue_web_source_refresh (GCLUE_WEB_SOURCE (wifi));
+                gclue_web_source_refresh (GCLUE_WEB_SOURCE (wifi));
 
                 return;
         }
@@ -393,6 +392,9 @@ connect_bss_signals (GClueWifi *wifi)
                                                 wifi);
 
         bss_list = wpa_interface_get_bsss (WPA_INTERFACE (priv->interface));
+        if (bss_list == NULL)
+                return;
+
         for (i = 0; bss_list[i] != NULL; i++)
                 on_bss_added (WPA_INTERFACE (priv->interface),
                               bss_list[i],
@@ -681,7 +683,7 @@ gclue_wifi_create_query (GClueWebSource *source,
         return gclue_mozilla_create_query (bss_list, NULL, error);
 }
 
-static GeocodeLocation *
+static GClueLocation *
 gclue_wifi_parse_response (GClueWebSource *source,
                            const char     *json,
                            GError        **error)
@@ -691,7 +693,7 @@ gclue_wifi_parse_response (GClueWebSource *source,
 
 static SoupMessage *
 gclue_wifi_create_submit_query (GClueWebSource  *source,
-                                GeocodeLocation *location,
+                                GClueLocation   *location,
                                 GError         **error)
 {
         GList *bss_list; /* As in Access Points */
